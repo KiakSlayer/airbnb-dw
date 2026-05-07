@@ -41,12 +41,16 @@ See [CLAUDE.md](CLAUDE.md) for the full phase tracker and task completion log.
 
 ## Repository Structure
 
+> **Keep this section up to date.** When you add or remove a file, update this tree before committing.
+
 ```
 airbnb-dw/
 ├── download.py              # Phase 1 — download raw CSVs from Inside Airbnb
 ├── generate_snapshot2.py    # Phase 2 — simulate 6-month mutations for SCD Type 2
 ├── upload_to_s3.py          # Phase 3 — upload raw/ to S3 with Hive partitioning
 ├── load_rds.py              # Phase 5 — load 1,000 rows/city into RDS source_listings
+├── glue_rds_export.py       # Kiak-A — Glue Python Shell job (S3 Bronze → source-exports)
+├── setup_glue_job.py        # Kiak-A — provisions Glue job + daily 02:00 UTC trigger
 └── raw/                     # Local only — gitignored (1.1 GiB). Structure:
     └── {city}/{snapshot}/
         ├── listings.csv.gz
@@ -57,7 +61,8 @@ diagram/
 ├── architecture.svg
 └── architecture.png
 handoff.md                   # Phase 6 handoff doc for Sun (ETL engineer)
-CLAUDE.md                    # Full project notes, commands, and team conventions
+CLAUDE.md                    # Claude Code briefing file — phase tracker, gotchas, AWS infra
+README.md                    # This file — human overview, keep repo structure in sync
 Inside Airbnb Data Dictionary.xlsx
 ```
 

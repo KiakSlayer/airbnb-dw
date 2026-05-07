@@ -61,7 +61,8 @@
 
 - **Instance:** `airbnb-source-db` (db.t3.micro, PostgreSQL 16.6)
 - **Endpoint:** `airbnb-source-db.crw6s6ou8gww.ap-southeast-1.rds.amazonaws.com:5432`
-- **DB / User / Pass:** `airbnb_source` / `airbnbadmin` / `REDACTED`
+- **DB / User:** `airbnb_source` / `airbnbadmin`
+- **Password:** stored in AWS Secrets Manager — `airbnb/rds/airbnbadmin` (region ap-southeast-1). Retrieve with: `aws secretsmanager get-secret-value --secret-id airbnb/rds/airbnbadmin --region ap-southeast-1 --query SecretString --output text`
 - **Security group:** `sg-0cc19604b360489bb` — port 5432 open. Add new inbound rule if your IP changes.
 - **Default state:** Stopped. Start before connecting: `aws rds start-db-instance --db-instance-identifier airbnb-source-db --region ap-southeast-1`
 - **Stop after use:** `aws rds stop-db-instance --db-instance-identifier airbnb-source-db --region ap-southeast-1`

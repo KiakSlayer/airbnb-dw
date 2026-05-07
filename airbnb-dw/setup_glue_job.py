@@ -27,13 +27,10 @@ TRIGGER_NAME  = "airbnb-rds-export-daily"
 ROLE_NAME     = "AWSGlueServiceRole-airbnb"
 ROLE_ARN      = f"arn:aws:iam::{ACCOUNT_ID}:role/{ROLE_NAME}"
 CRON_SCHEDULE = "cron(0 2 * * ? *)"  # 02:00 UTC daily
+S3_PREFIX     = "source-exports"
 
-RDS_HOST  = "airbnb-source-db.crw6s6ou8gww.ap-southeast-1.rds.amazonaws.com"
-RDS_PORT  = "5432"
-RDS_DB    = "airbnb_source"
-RDS_USER  = "airbnbadmin"
-RDS_PASS  = "REDACTED"
-S3_PREFIX = "source-exports"
+# RDS credentials are NOT stored here — retrieve from Secrets Manager:
+#   aws secretsmanager get-secret-value --secret-id airbnb/rds/airbnbadmin --region ap-southeast-1
 
 session = boto3.Session(region_name=REGION)
 s3      = session.client("s3")
@@ -51,8 +48,35 @@ TRUST_POLICY = json.dumps({
 
 MANAGED_POLICIES = [
     "arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole",
-    "arn:aws:iam::aws:policy/AmazonS3FullAccess",
+    # AmazonS3FullAccess intentionally removed — scoped inline policy applied instead
 ]
+
+# Least-privilege S3 policy: read from raw/ and glue-scripts/, write to source-exports/ only
+INLINE_POLICY_NAME = "AirbnbDWGlueS3Policy"
+INLINE_POLICY_DOC = json.dumps({
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": ["s3:GetObject"],
+            "Resource": [
+                f"arn:aws:s3:::{BUCKET}/raw/*",
+                f"arn:aws:s3:::{BUCKET}/glue-scripts/*",
+            ],
+        },
+        {
+            "Effect": "Allow",
+            "Action": ["s3:ListBucket"],
+            "Resource": f"arn:aws:s3:::{BUCKET}",
+            "Condition": {"StringLike": {"s3:prefix": ["raw/*", "glue-scripts/*", "source-exports/*"]}},
+        },
+        {
+            "Effect": "Allow",
+            "Action": ["s3:PutObject"],
+            "Resource": f"arn:aws:s3:::{BUCKET}/source-exports/*",
+        },
+    ],
+})
 
 MANUAL_ROLE_INSTRUCTIONS = f"""
 ----------------------------------------------------------------------
@@ -64,14 +88,11 @@ Create the role through the AWS Console:
   1. Go to: https://console.aws.amazon.com/iam/home#/roles
   2. Click "Create role"
   3. Trusted entity type: AWS service -> Glue
-  4. Add these managed policies:
-       - AWSGlueServiceRole
-       - AmazonS3FullAccess
+  4. Add ONLY this managed policy: AWSGlueServiceRole
   5. Role name: {ROLE_NAME}
   6. Click "Create role"
 
-Then re-run:
-    python setup_glue_job.py
+Then re-run this script — it will add the scoped S3 inline policy automatically.
 ----------------------------------------------------------------------
 """
 
@@ -84,33 +105,51 @@ def upload_script():
 
 def ensure_iam_role():
     print(f"[2/4] Checking IAM role '{ROLE_NAME}' ...")
+    role_exists = False
     try:
         iam.get_role(RoleName=ROLE_NAME)
-        print("      Role already exists — OK")
-        return
+        role_exists = True
+        print("      Role already exists.")
     except ClientError as e:
-        if e.response["Error"]["Code"] != "NoSuchEntityException" and \
-                e.response["Error"]["Code"] != "NoSuchEntity":
+        if e.response["Error"]["Code"] not in ("NoSuchEntityException", "NoSuchEntity"):
             raise
 
-    print(f"      Role not found. Attempting to create '{ROLE_NAME}' ...")
+    if not role_exists:
+        print(f"      Role not found. Attempting to create '{ROLE_NAME}' ...")
+        try:
+            iam.create_role(
+                RoleName=ROLE_NAME,
+                AssumeRolePolicyDocument=TRUST_POLICY,
+                Description="Glue service role for Airbnb DW project",
+            )
+            for policy_arn in MANAGED_POLICIES:
+                iam.attach_role_policy(RoleName=ROLE_NAME, PolicyArn=policy_arn)
+                print(f"      Attached: {policy_arn}")
+            print("      Role created. Waiting 15 s for IAM propagation ...")
+            time.sleep(15)
+        except ClientError as create_err:
+            code = create_err.response["Error"]["Code"]
+            if code in ("AccessDenied", "UnauthorizedAccess", "AccessDeniedException"):
+                print(MANUAL_ROLE_INSTRUCTIONS)
+                sys.exit(1)
+            raise
+
+    # Detach overly-broad AmazonS3FullAccess if still attached (security remediation)
+    broad_policy = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
     try:
-        iam.create_role(
-            RoleName=ROLE_NAME,
-            AssumeRolePolicyDocument=TRUST_POLICY,
-            Description="Glue service role for Airbnb DW project",
-        )
-        for policy_arn in MANAGED_POLICIES:
-            iam.attach_role_policy(RoleName=ROLE_NAME, PolicyArn=policy_arn)
-            print(f"      Attached: {policy_arn}")
-        print("      Role created. Waiting 15 s for IAM propagation ...")
-        time.sleep(15)
-    except ClientError as create_err:
-        code = create_err.response["Error"]["Code"]
-        if code in ("AccessDenied", "UnauthorizedAccess", "AccessDeniedException"):
-            print(MANUAL_ROLE_INSTRUCTIONS)
-            sys.exit(1)
-        raise
+        iam.detach_role_policy(RoleName=ROLE_NAME, PolicyArn=broad_policy)
+        print("      Detached AmazonS3FullAccess (replaced by scoped inline policy).")
+    except ClientError as e:
+        if e.response["Error"]["Code"] not in ("NoSuchEntityException", "NoSuchEntity"):
+            raise  # already not attached — fine
+
+    # Apply least-privilege inline S3 policy
+    iam.put_role_policy(
+        RoleName=ROLE_NAME,
+        PolicyName=INLINE_POLICY_NAME,
+        PolicyDocument=INLINE_POLICY_DOC,
+    )
+    print(f"      Applied inline policy '{INLINE_POLICY_NAME}' (scoped to {BUCKET}).")
 
 
 JOB_DEFAULT_ARGS = {
