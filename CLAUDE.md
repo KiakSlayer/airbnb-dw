@@ -18,9 +18,9 @@
 ## Current Status (as of 2026-05-08)
 
 **Kiak** — All deliverables complete ✅
-**Sun** — Not started; blocked on Phase 7 (Pluck's S3 lake setup)
-**Pluck** — Phase 7 is next (S3 lake zones + Glue Crawlers)
-**Jop** — Blocked on Phase 8
+**Sun** — Phase 7 done (catalog ready); ⬜ Phase 8 unblocked — Glue Job 1 Raw → Cleaned
+**Pluck** — Phase 7 done ✅; ⬜ Phase 11 (Variety memo) can start now
+**Jop** — Still blocked on Phase 8
 
 ### Phase Tracker
 
@@ -28,8 +28,8 @@
 |-------|-------|------|--------|
 | 1–6 | Kiak | Download, simulate, upload, RDS load, handoff | ✅ Done |
 | Kiak-A | Kiak | Glue Python Shell job + daily Scheduler (Automation 1%) | ✅ Done 2026-05-08 |
-| 7 | Pluck | S3 lake zones (raw/cleaned/warehouse) + Glue Crawlers | ⬜ Next |
-| 8 | Sun | Glue Job 1: Raw → Cleaned (Parquet, dedup, cast) | ⬜ Blocked by 7 |
+| 7 | Pluck | S3 lake zones (raw/cleaned/warehouse) + Glue Crawlers | ✅ Done 2026-05-08 |
+| 8 | Sun | Glue Job 1: Raw → Cleaned (Parquet, dedup, cast) | ⬜ Next (unblocked) |
 | 9 | Sun | Glue Job 2: Cleaned → Dimensions (SCD Type 2) | ⬜ Blocked by 8 |
 | 10 | Sun | Glue Job 3: Cleaned → Facts + VADER sentiment | ⬜ Blocked by 9 |
 | 11 | Pluck | Variety justification memo (5 format families) | ⬜ Can start now |
@@ -48,6 +48,7 @@
 |------|--------|------|-------|
 | 2026-05-07 | Kiak | Phases 1–6 complete | Download, simulate, upload, RDS, handoff doc |
 | 2026-05-08 | Kiak | Glue job `airbnb-rds-to-s3-export` + daily trigger | S3 Bronze → source-exports, 8 partitions, 02:00 UTC schedule |
+| 2026-05-08 | Pluck | Phase 7 — Glue Data Catalog: 4 DBs + 4 crawlers via `setup_crawlers.py` | Raw + source-exports crawlers ran SUCCEEDED; cleaned + warehouse crawlers deferred until Sun's data lands |
 
 ---
 
@@ -72,8 +73,19 @@
 
 - **Job:** `airbnb-rds-to-s3-export` (Python Shell, GlueVersion 1.0)
 - **Trigger:** `airbnb-rds-export-daily` — `cron(0 2 * * ? *)`, ACTIVATED
-- **IAM role:** `AWSGlueServiceRole-airbnb`
+- **IAM role:** `AWSGlueServiceRole-airbnb` — inline policy `AirbnbDWGlueS3Policy` (read raw/cleaned/warehouse/source-exports/glue-scripts; write source-exports only)
 - **Script on S3:** `s3://airbnb-dw-856480643132/glue-scripts/glue_rds_export.py`
+
+### Glue Data Catalog (Phase 7 — Pluck)
+
+| Database | Source zone | Crawler | State |
+|----------|-------------|---------|-------|
+| `airbnb_raw` | `s3://.../raw/` | `airbnb-crawler-raw` | crawled ✅ — 1 table `raw` (8 partitions city/snapshot) |
+| `airbnb_source_exports` | `s3://.../source-exports/` | `airbnb-crawler-source-exports` | crawled ✅ — 1 table `source_exports` (8 partitions) |
+| `airbnb_cleaned` | `s3://.../cleaned/` | `airbnb-crawler-cleaned` | READY — run after Phase 8 lands data |
+| `airbnb_warehouse` | `s3://.../warehouse/` | `airbnb-crawler-warehouse` | READY — run after Phases 9–10 land data |
+
+Run a deferred crawler manually: `aws glue start-crawler --name airbnb-crawler-cleaned --region ap-southeast-1`
 
 ### S3 Layout
 
@@ -132,6 +144,12 @@ s3://airbnb-dw-856480643132/
 - Git Bash converts leading `/` paths to Windows paths — use PowerShell for AWS CLI calls with log group names like `/aws-glue/...`
 - University SCP may block `iam:CreateRole` — `setup_glue_job.py` handles this with console instructions
 
+### Glue Crawlers
+- `update_crawler` takes **flat kwargs** (`Name=, Role=, Targets=, ...`) — NOT a nested `CrawlerUpdate` dict like `update_job`. Copy/pasting the job pattern raises `InvalidInputException`.
+- `RecrawlBehavior=CRAWL_NEW_FOLDERS_ONLY` requires `SchemaChangePolicy.UpdateBehavior=LOG` AND `DeleteBehavior=LOG`. Only `CRAWL_EVERYTHING` accepts `UPDATE_IN_DATABASE`.
+- `start_crawler` raises `CrawlerRunningException` if already running — catch it as a no-op rather than re-raise.
+- **Merged-table heuristic:** when multiple file types (`listings.csv.gz`, `calendar.csv.gz`, `reviews.csv.gz`) share the same partition leaf prefix (`raw/city=X/snapshot=Y/`), Glue's default `CombineCompatibleSchemas` grouping unions them into ONE table with a 92-col superschema instead of 3 separate tables. Outcome: `airbnb_raw.raw` is the single merged table. **Mitigation for Phase 8:** in Glue Job 1, read each CSV explicitly by path (`connection_options={"paths": ["s3://.../listings.csv.gz", ...]}`) instead of relying on the catalog table — sidesteps the merged schema. The partition keys (`city`, `snapshot`) on the merged table are still useful for Athena WHERE filters.
+
 ---
 
 ## Scripts
@@ -144,6 +162,7 @@ s3://airbnb-dw-856480643132/
 | `load_rds.py` | `python load_rds.py` | Phase 5: load 4,000 rows into RDS |
 | `glue_rds_export.py` | Deploy via `setup_glue_job.py` | Glue job script (S3 Bronze → source-exports) |
 | `setup_glue_job.py` | `python setup_glue_job.py` | Provision/update Glue job + trigger (idempotent) |
+| `setup_crawlers.py` | `python setup_crawlers.py` | Phase 7: provision 4 Glue DBs + 4 crawlers (idempotent); auto-runs raw + source-exports crawlers |
 
 All scripts run from `cd airbnb-dw`.
 
