@@ -1,0 +1,134 @@
+<svg viewBox="0 0 820 560" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, sans-serif">
+  <title>Airbnb Cross-City Analytics — AWS Data Warehouse Architecture</title>
+  <desc>Architecture diagram showing data flow from Inside Airbnb through S3 Bronze/Silver/Gold layers, RDS PostgreSQL, Glue ETL, and QuickSight</desc>
+
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#888"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#4A90D9"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="820" height="560" fill="#ffffff" rx="12"/>
+
+  <!-- Title -->
+  <text x="410" y="32" text-anchor="middle" font-size="15" font-weight="700" fill="#1a1a1a">Airbnb Cross-City Analytics — AWS Architecture</text>
+  <text x="410" y="50" text-anchor="middle" font-size="11" fill="#888">ap-southeast-1 (Singapore)</text>
+
+  <!-- ── SOURCE ── -->
+  <rect x="30" y="100" width="120" height="90" rx="8" fill="#f5f5f5" stroke="#ddd" stroke-width="1.5"/>
+  <text x="90" y="130" text-anchor="middle" font-size="11" font-weight="600" fill="#1a1a1a">Inside Airbnb</text>
+  <text x="90" y="148" text-anchor="middle" font-size="9.5" fill="#555">listings.csv.gz</text>
+  <text x="90" y="162" text-anchor="middle" font-size="9.5" fill="#555">calendar.csv.gz</text>
+  <text x="90" y="176" text-anchor="middle" font-size="9.5" fill="#555">reviews.csv.gz</text>
+
+  <text x="90" y="205" text-anchor="middle" font-size="9" fill="#888">Bangkok · Singapore</text>
+  <text x="90" y="217" text-anchor="middle" font-size="9" fill="#888">Tokyo · Lisbon</text>
+  <text x="90" y="232" text-anchor="middle" font-size="9" font-style="italic" fill="#4A90D9">download.py</text>
+
+  <!-- Arrow: Snapshot 1 -->
+  <line x1="150" y1="145" x2="210" y2="145" stroke="#888" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="180" y="138" text-anchor="middle" font-size="8.5" fill="#888">Snapshot 1</text>
+
+  <!-- Dashed arrow: Snapshot 2 -->
+  <line x1="90" y1="218" x2="90" y2="250" stroke="#4A90D9" stroke-width="1.2" stroke-dasharray="4,3"/>
+  <line x1="90" y1="250" x2="210" y2="250" stroke="#4A90D9" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow-blue)"/>
+  <text x="150" y="244" text-anchor="middle" font-size="8.5" fill="#4A90D9">Snapshot 2 (simulated)</text>
+  <text x="90" y="266" text-anchor="middle" font-size="9" font-style="italic" fill="#4A90D9">generate_snapshot2.py</text>
+
+  <!-- ── S3 BRONZE ── -->
+  <rect x="210" y="80" width="148" height="250" rx="8" fill="#FEF3E2" stroke="#F0A030" stroke-width="1.5"/>
+  <text x="284" y="102" text-anchor="middle" font-size="10" font-weight="700" fill="#C07010">Bronze (raw)</text>
+  <text x="284" y="118" text-anchor="middle" font-size="9" fill="#8a5a00">S3 · airbnb-dw-856480643132</text>
+
+  <rect x="222" y="126" width="124" height="56" rx="4" fill="#fff8ee" stroke="#F0A030" stroke-width="1"/>
+  <text x="284" y="142" text-anchor="middle" font-size="8.5" font-weight="600" fill="#8a5a00">city={city}/</text>
+  <text x="284" y="155" text-anchor="middle" font-size="8.5" fill="#8a5a00">snapshot={YYYY-MM}/</text>
+  <text x="284" y="168" text-anchor="middle" font-size="8" fill="#aaa">listings · calendar</text>
+  <text x="284" y="179" text-anchor="middle" font-size="8" fill="#aaa">reviews · neighbourhoods</text>
+
+  <text x="284" y="202" text-anchor="middle" font-size="8.5" fill="#8a5a00">2 snapshots x 4 cities</text>
+  <text x="284" y="214" text-anchor="middle" font-size="8.5" fill="#8a5a00">= 32 files total</text>
+  <text x="284" y="228" text-anchor="middle" font-size="9" font-style="italic" fill="#C07010">upload_to_s3.py</text>
+
+  <!-- RDS block inside Bronze -->
+  <rect x="222" y="242" width="124" height="34" rx="4" fill="#E8F4FF" stroke="#4A90D9" stroke-width="1"/>
+  <text x="284" y="257" text-anchor="middle" font-size="8.5" font-weight="600" fill="#1a5fa8">RDS PostgreSQL</text>
+  <text x="284" y="270" text-anchor="middle" font-size="8" fill="#1a5fa8">source_listings (4,000 rows)</text>
+  <text x="284" y="292" text-anchor="middle" font-size="9" font-style="italic" fill="#4A90D9">load_rds.py</text>
+
+  <!-- Arrow: Bronze → Silver -->
+  <line x1="358" y1="185" x2="418" y2="185" stroke="#888" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="388" y="178" text-anchor="middle" font-size="8.5" fill="#888">Glue ETL</text>
+
+  <!-- ── S3 SILVER ── -->
+  <rect x="418" y="80" width="130" height="175" rx="8" fill="#F0F8F0" stroke="#3aaa55" stroke-width="1.5"/>
+  <text x="483" y="102" text-anchor="middle" font-size="10" font-weight="700" fill="#2a7a3a">Silver (clean)</text>
+  <text x="483" y="117" text-anchor="middle" font-size="9" fill="#2a7a3a">Glue · Parquet</text>
+
+  <rect x="428" y="125" width="110" height="110" rx="4" fill="#e8f7e8" stroke="#3aaa55" stroke-width="1"/>
+  <text x="483" y="141" text-anchor="middle" font-size="8.5" font-weight="600" fill="#2a7a3a">Transformations</text>
+  <text x="483" y="156" text-anchor="middle" font-size="8" fill="#555">price to NUMERIC</text>
+  <text x="483" y="169" text-anchor="middle" font-size="8" fill="#555">t/f to BOOLEAN</text>
+  <text x="483" y="182" text-anchor="middle" font-size="8" fill="#555">amenities to JSON</text>
+  <text x="483" y="195" text-anchor="middle" font-size="8" fill="#555">SCD Type 2 merge</text>
+  <text x="483" y="208" text-anchor="middle" font-size="8" fill="#555">dedup · null fill</text>
+  <text x="483" y="222" text-anchor="middle" font-size="8.5" fill="#2a7a3a">Partitioned Parquet</text>
+
+  <!-- Arrow: Silver → Gold -->
+  <line x1="548" y1="165" x2="608" y2="165" stroke="#888" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="578" y="158" text-anchor="middle" font-size="8.5" fill="#888">Glue ETL</text>
+
+  <!-- ── S3 GOLD ── -->
+  <rect x="608" y="80" width="130" height="175" rx="8" fill="#FFFAE8" stroke="#D4A800" stroke-width="1.5"/>
+  <text x="673" y="102" text-anchor="middle" font-size="10" font-weight="700" fill="#a07800">Gold (warehouse)</text>
+  <text x="673" y="117" text-anchor="middle" font-size="9" fill="#a07800">Star Schema</text>
+
+  <rect x="618" y="125" width="110" height="110" rx="4" fill="#fff8d6" stroke="#D4A800" stroke-width="1"/>
+  <text x="673" y="141" text-anchor="middle" font-size="8.5" font-weight="600" fill="#a07800">Dimensions</text>
+  <text x="673" y="155" text-anchor="middle" font-size="8" fill="#555">dim_listing</text>
+  <text x="673" y="167" text-anchor="middle" font-size="8" fill="#555">dim_host</text>
+  <text x="673" y="179" text-anchor="middle" font-size="8" fill="#555">dim_date</text>
+  <text x="673" y="191" text-anchor="middle" font-size="8" fill="#555">dim_neighbourhood</text>
+  <line x1="618" y1="198" x2="728" y2="198" stroke="#D4A800" stroke-width="0.8"/>
+  <text x="673" y="211" text-anchor="middle" font-size="8.5" font-weight="600" fill="#a07800">Fact</text>
+  <text x="673" y="224" text-anchor="middle" font-size="8" fill="#555">fact_availability</text>
+
+  <!-- Arrow: Gold → QuickSight -->
+  <line x1="673" y1="255" x2="673" y2="315" stroke="#888" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- ── QUICKSIGHT ── -->
+  <rect x="608" y="315" width="130" height="70" rx="8" fill="#F0E8FF" stroke="#8a40cc" stroke-width="1.5"/>
+  <text x="673" y="339" text-anchor="middle" font-size="10" font-weight="700" fill="#5a1a99">QuickSight</text>
+  <text x="673" y="355" text-anchor="middle" font-size="8.5" fill="#5a1a99">Cross-city dashboards</text>
+  <text x="673" y="368" text-anchor="middle" font-size="8.5" fill="#5a1a99">Price · Availability · Reviews</text>
+
+  <!-- Dashed: RDS → Silver -->
+  <line x1="346" y1="260" x2="430" y2="200" stroke="#4A90D9" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow-blue)"/>
+  <text x="397" y="218" text-anchor="middle" font-size="8" fill="#4A90D9" transform="rotate(-33,397,218)">alt source</text>
+
+  <!-- ── TEAM ROLES ── -->
+  <rect x="30" y="400" width="740" height="60" rx="8" fill="#f5f5f5" stroke="#ddd" stroke-width="1"/>
+  <text x="410" y="420" text-anchor="middle" font-size="10" font-weight="600" fill="#1a1a1a">Team Responsibilities</text>
+  <text x="160" y="440" text-anchor="middle" font-size="9.5" fill="#C07010">Kiak — Data Engineer</text>
+  <text x="160" y="452" text-anchor="middle" font-size="8.5" fill="#555">Bronze + RDS source DB</text>
+  <text x="390" y="440" text-anchor="middle" font-size="9.5" fill="#2a7a3a">Sun — ETL Engineer</text>
+  <text x="390" y="452" text-anchor="middle" font-size="8.5" fill="#555">Silver + Gold Glue jobs</text>
+  <text x="620" y="440" text-anchor="middle" font-size="9.5" fill="#5a1a99">Team — Reporting</text>
+  <text x="620" y="452" text-anchor="middle" font-size="8.5" fill="#555">QuickSight dashboards</text>
+
+  <!-- ── LEGEND ── -->
+  <rect x="30" y="472" width="740" height="72" rx="8" fill="#f5f5f5" stroke="#ddd" stroke-width="1"/>
+  <text x="410" y="492" text-anchor="middle" font-size="10" font-weight="600" fill="#1a1a1a">Key Notes</text>
+  <text x="110" y="510" text-anchor="middle" font-size="8.5" fill="#555">Hive partitioning:</text>
+  <text x="110" y="522" text-anchor="middle" font-size="8.5" fill="#555">city=X/snapshot=Y</text>
+  <text x="290" y="510" text-anchor="middle" font-size="8.5" fill="#555">SCD Type 2:</text>
+  <text x="290" y="522" text-anchor="middle" font-size="8.5" fill="#555">2 snapshots per city</text>
+  <text x="470" y="510" text-anchor="middle" font-size="8.5" fill="#555">Variety (Big Data):</text>
+  <text x="470" y="522" text-anchor="middle" font-size="8.5" fill="#555">amenities JSON arrays</text>
+  <text x="650" y="510" text-anchor="middle" font-size="8.5" fill="#555">RDS: db.t3.micro</text>
+  <text x="650" y="522" text-anchor="middle" font-size="8.5" fill="#555">PostgreSQL 16.6</text>
+</svg>

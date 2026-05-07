@@ -1,0 +1,25 @@
+# Raw data — too large for git (1.1 GiB across 32 files)
+# Exclude by file type so .gitkeep files in each snapshot dir remain tracked
+airbnb-dw/raw/**/*.csv.gz
+airbnb-dw/raw/**/*.geojson
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+
+# Jupyter
+.ipynb_checkpoints/
