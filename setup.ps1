@@ -29,5 +29,15 @@ pip install -r requirements.txt
 Write-Host "`nVerifying installs..."
 python -c "import pandas, numpy, boto3, psycopg2, openpyxl, requests; print('All packages OK')"
 
+# Install /start-session Claude Code skill
+$skillSrc = ".\.claude\skills\start-session\SKILL.md"
+$skillDst = "$env:USERPROFILE\.claude\skills\start-session"
+if (Test-Path $skillSrc) {
+    Write-Host "`nInstalling /start-session Claude Code skill..."
+    New-Item -ItemType Directory -Force -Path $skillDst | Out-Null
+    Copy-Item $skillSrc "$skillDst\SKILL.md" -Force
+    Write-Host "  Skill installed. Use /start-session at the start of each Claude Code session."
+}
+
 Write-Host "`nSetup complete. Activate the environment with:"
 Write-Host "  .\.venv\Scripts\Activate.ps1"
