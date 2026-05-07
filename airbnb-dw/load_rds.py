@@ -1,13 +1,22 @@
 import os
+import json
+import boto3
 import pandas as pd
 import psycopg2
 from psycopg2.extras import execute_values
 
+# Credentials loaded from AWS Secrets Manager at runtime — never hardcoded
+def _get_rds_secret():
+    client = boto3.client("secretsmanager", region_name="ap-southeast-1")
+    secret = client.get_secret_value(SecretId="airbnb/rds/airbnbadmin")
+    return json.loads(secret["SecretString"])
+
+_secret  = _get_rds_secret()
 RDS_HOST = "airbnb-source-db.crw6s6ou8gww.ap-southeast-1.rds.amazonaws.com"
 RDS_PORT = 5432
 RDS_DB   = "airbnb_source"
-RDS_USER = "airbnbadmin"
-RDS_PASS = "REDACTED"
+RDS_USER = _secret["username"]
+RDS_PASS = _secret["password"]
 RAW_DIR  = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'raw')
 
 CREATE_TABLE_SQL = """

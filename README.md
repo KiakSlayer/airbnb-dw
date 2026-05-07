@@ -33,29 +33,15 @@ Presentation (5%) shared: Kiak + Sun → Video 1 · Pluck + Jop → Video 2.
 
 ## Phase Tracker
 
-| Phase | Owner | Description | Status |
-|-------|-------|-------------|--------|
-| 1 | Kiak | Download Snapshot 1 (16 files, 4 cities) | ✅ Done |
-| 2 | Kiak | Simulate Snapshot 2 — 6-month drift for SCD Type 2 | ✅ Done |
-| 3 | Kiak | Upload raw data to S3 with Hive partitioning | ✅ Done |
-| 4 | Kiak | Provision RDS PostgreSQL on ap-southeast-1 | ✅ Done |
-| 5 | Kiak | Load `source_listings` (4,000 rows) into RDS | ✅ Done |
-| 6 | Kiak | Write handoff doc; stop RDS overnight | ✅ Done |
-| 7 | Pluck | S3 lake zones + Glue Crawlers on raw | ⬜ Next |
-| 8 | Sun | Glue Job 1: Raw → Cleaned (Parquet, dedup, cast) | ⬜ |
-| 9 | Sun | Glue Job 2: Cleaned → Dimensions (SCD Type 2) | ⬜ |
-| 10 | Sun | Glue Job 3: Cleaned → Facts + VADER sentiment | ⬜ |
-| 11 | Pluck | Variety justification memo (5 format families) | ⬜ |
-| 12 | Pluck | Athena on cleaned zone + 5–10 sample queries | ⬜ |
-| 13 | Pluck | Glue Workflow Scheduler: Job 1→2→3 at 02:00 UTC | ⬜ |
-| 14 | Jop | QuickSight connected to Athena/RDS | ⬜ |
-| 15–17 | Jop | Dashboards 1–3 (Market · Pricing · Sentiment) | ⬜ |
-| 18 | Sun | End-to-end pipeline test + row count validation | ⬜ |
-| 19 | All | Record Video 1 (Kiak+Sun) and Video 2 (Pluck+Jop) | ⬜ |
+See [CLAUDE.md](CLAUDE.md) for the full phase tracker and task completion log.
+
+**Current status (2026-05-08):** Phases 1–6 + Kiak automation complete. Phase 7 (Pluck — S3 lake zones + Glue Crawlers) is next.
 
 ---
 
 ## Repository Structure
+
+> **Keep this section up to date.** When you add or remove a file, update this tree before committing.
 
 ```
 airbnb-dw/
@@ -63,6 +49,8 @@ airbnb-dw/
 ├── generate_snapshot2.py    # Phase 2 — simulate 6-month mutations for SCD Type 2
 ├── upload_to_s3.py          # Phase 3 — upload raw/ to S3 with Hive partitioning
 ├── load_rds.py              # Phase 5 — load 1,000 rows/city into RDS source_listings
+├── glue_rds_export.py       # Kiak-A — Glue Python Shell job (S3 Bronze → source-exports)
+├── setup_glue_job.py        # Kiak-A — provisions Glue job + daily 02:00 UTC trigger
 └── raw/                     # Local only — gitignored (1.1 GiB). Structure:
     └── {city}/{snapshot}/
         ├── listings.csv.gz
@@ -73,7 +61,8 @@ diagram/
 ├── architecture.svg
 └── architecture.png
 handoff.md                   # Phase 6 handoff doc for Sun (ETL engineer)
-CLAUDE.md                    # Full project notes, commands, and team conventions
+CLAUDE.md                    # Claude Code briefing file — phase tracker, gotchas, AWS infra
+README.md                    # This file — human overview, keep repo structure in sync
 Inside Airbnb Data Dictionary.xlsx
 ```
 
