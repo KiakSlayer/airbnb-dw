@@ -22,9 +22,22 @@ S3_INPUT_PRE   = "raw"
 S3_OUTPUT_PRE  = "source-exports"
 REGION         = "ap-southeast-1"
 
-CITIES    = ["bangkok", "singapore", "tokyo", "lisbon"]
-# Lisbon Snapshot 1 is 2025-12; others are 2025-09. Script silently skips missing combinations.
-SNAPSHOTS = ["2025-09", "2025-12", "2026-03"]
+CITIES = ["bangkok", "singapore", "tokyo", "lisbon"]
+
+
+def discover_snapshots(s3_client, city):
+    """Return sorted list of snapshot folders found under raw/city={city}/."""
+    prefix = "{}/city={}/".format(S3_INPUT_PRE, city)
+    paginator = s3_client.get_paginator("list_objects_v2")
+    snapshots = []
+    for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix, Delimiter="/"):
+        for cp in page.get("CommonPrefixes") or []:
+            sub = cp.get("Prefix", "").rstrip("/")
+            marker = "snapshot="
+            idx = sub.rfind(marker)
+            if idx != -1:
+                snapshots.append(sub[idx + len(marker):])
+    return sorted(snapshots)
 
 
 def read_listing(s3_client, city, snapshot):
@@ -107,7 +120,12 @@ def main():
 
     summary = []
     for city in CITIES:
-        for snapshot in SNAPSHOTS:
+        snapshots = discover_snapshots(s3, city)
+        if not snapshots:
+            print("[WARN] No snapshots found under raw/city={}/".format(city))
+            continue
+        print("[SCAN] city={} snapshots={}".format(city, snapshots))
+        for snapshot in snapshots:
             df = read_listing(s3, city, snapshot)
             if df is None:
                 continue
