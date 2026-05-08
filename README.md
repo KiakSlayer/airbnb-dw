@@ -35,35 +35,21 @@ Presentation (5%) shared: Kiak + Sun → Video 1 · Pluck + Jop → Video 2.
 
 See [CLAUDE.md](CLAUDE.md) for the full phase tracker and task completion log.
 
-**Current status (2026-05-09):** Phases 1–7 + Kiak automation complete. Phase 8 (Sun — Glue Job 1: Raw → Cleaned) is next.
+For current phase status, see [CLAUDE.md](CLAUDE.md) — it tracks every phase and is updated each session.
 
 ---
 
-## Repository Structure
-
-> **Keep this section up to date.** When you add or remove a file, update this tree before committing.
+## Repository Layout
 
 ```
-airbnb-dw/
-├── download.py              # Phase 1 — download raw CSVs from Inside Airbnb
-├── generate_snapshot2.py    # Phase 2 — simulate 6-month mutations for SCD Type 2
-├── upload_to_s3.py          # Phase 3 — upload raw/ to S3 with Hive partitioning
-├── load_rds.py              # Phase 5 — load 1,000 rows/city into RDS source_listings
-├── glue_rds_export.py       # Kiak-A — Glue Python Shell job (S3 Bronze → source-exports)
-├── setup_glue_job.py        # Kiak-A — provisions Glue job + daily 02:00 UTC trigger
-└── raw/                     # Local only — gitignored (1.1 GiB). Structure:
-    └── {city}/{snapshot}/
-        ├── listings.csv.gz
-        ├── calendar.csv.gz
-        ├── reviews.csv.gz
-        └── neighbourhoods.geojson
-diagram/
-├── architecture.svg
-└── architecture.png
-CLAUDE.md                    # Claude Code briefing file — phase tracker, gotchas, AWS infra
-README.md                    # This file — human overview, keep repo structure in sync
-Inside Airbnb Data Dictionary.xlsx
+airbnb-dw/        Per-phase Python scripts (download, upload, RDS load, Glue setup)
+diagram/          Architecture SVG/PNG
+handoff.md        Phase 6 handoff doc (Sun's onboarding)
+CLAUDE.md         Operational tracker — phases, scripts, gotchas, AWS infra
+README.md         This file — stable project overview
 ```
+
+Per-script details live in `CLAUDE.md` under **Scripts**; that's the canonical index and is updated as work lands. Raw data (`airbnb-dw/raw/`, ~1.1 GiB) is local-only and gitignored.
 
 ---
 

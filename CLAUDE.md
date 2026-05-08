@@ -10,8 +10,19 @@
 - **After every completed task:** add an entry to the Task Completion Log below.
 - **After every session:** update "Current Status" to reflect what's done and what's next.
 - **When a gotcha is discovered** (AWS quirk, library limitation, etc.): add it to Known Gotchas.
+- **When a new script is added or removed:** update the **Scripts** table — this is the canonical index; README points here.
 - **Do not duplicate README.md.** This file is for Claude, not for humans reading the repo.
 - **Keep concise.** One line per concept where possible. Long explanations go in separate docs.
+
+### When README.md needs updating
+README is intentionally stable — most session work updates only this file. Touch README **only** when one of these changes:
+- Team roster or score ownership (Team table)
+- High-level architecture (medallion layers, BI tool)
+- Cities or snapshot dates
+- AWS account / region / bucket / RDS instance identifiers
+- Quick Start prerequisites (new pip dep, new auth flow)
+
+Per-phase scripts, AWS resource details, and gotchas all stay in CLAUDE.md — do NOT mirror them into README.
 
 ---
 
