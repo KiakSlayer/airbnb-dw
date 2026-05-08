@@ -35,7 +35,7 @@ Presentation (5%) shared: Kiak + Sun → Video 1 · Pluck + Jop → Video 2.
 
 See [CLAUDE.md](CLAUDE.md) for the full phase tracker and task completion log.
 
-**Current status (2026-05-08):** Phases 1–6 + Kiak automation complete. Phase 7 (Pluck — S3 lake zones + Glue Crawlers) is next.
+**Current status (2026-05-09):** Phases 1–7 + Kiak automation complete. Phase 8 (Sun — Glue Job 1: Raw → Cleaned) is next.
 
 ---
 
@@ -60,7 +60,6 @@ airbnb-dw/
 diagram/
 ├── architecture.svg
 └── architecture.png
-handoff.md                   # Phase 6 handoff doc for Sun (ETL engineer)
 CLAUDE.md                    # Claude Code briefing file — phase tracker, gotchas, AWS infra
 README.md                    # This file — human overview, keep repo structure in sync
 Inside Airbnb Data Dictionary.xlsx
@@ -109,28 +108,7 @@ aws rds stop-db-instance --db-instance-identifier airbnb-source-db --region ap-s
 
 ## Cities & Snapshots
 
-| City | Snapshot 1 | Snapshot 2 (simulated) |
-|------|-----------|----------------------|
-| Bangkok | 2025-09 | 2026-03 |
-| Singapore | 2025-09 | 2026-03 |
-| Tokyo | 2025-09 | 2026-03 |
-| Lisbon | 2025-12 | 2026-03 |
-
-Snapshot 2 applies controlled mutations (price drift, superhost flips, room type changes) to drive SCD Type 2 slowly-changing dimensions. See `CLAUDE.md` for exact rates.
-
----
-
-## Data Quality Notes
-
-| Field | Raw format | ETL fix |
-|-------|-----------|---------|
-| `price` | `"$1,595.00"` | Strip `$`/`,`, cast to NUMERIC |
-| `host_is_superhost` | `"t"` / `"f"` | Map to boolean |
-| `host_response_rate` | `"95%"` | Strip `%`, cast to FLOAT |
-| `amenities` | JSON string | Parse as array |
-| `host_verifications` | JSON string | Parse as array |
-
-> **Schema drift:** Singapore CSVs include a `host_profile_id` column absent from other cities. ETL jobs must normalise to a fixed schema.
+Bangkok · Singapore · Tokyo each have snapshots 2025-09 and 2026-03; Lisbon has 2025-12 and 2026-03. Snapshot 2 is programmatically simulated to drive SCD Type 2. See `CLAUDE.md` for the full table, Lisbon gotcha, and mutation rates.
 
 ---
 
@@ -145,6 +123,3 @@ See `CLAUDE.md` for RDS connection details, security group setup, and full comma
 
 ---
 
-## Handoff
-
-`handoff.md` contains Sun's onboarding guide: S3 file inventory, RDS connection, SCD Type 2 design, and expected Silver/Gold architecture.
