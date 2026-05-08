@@ -203,12 +203,7 @@ def ensure_iam_policy_extended():
     # run — so re-runs stay idempotent instead of exiting before any database
     # or crawler provisioning happens.
     try:
-        iam.get_role_policy(RoleName=ROLE_NAME, PolicyName=INLINE_POLICY_NAME)
-        print(
-            f"      PutRolePolicy blocked by SCP, but '{INLINE_POLICY_NAME}' "
-            f"is already attached to '{ROLE_NAME}'. Continuing."
-        )
-        return
+        resp = iam.get_role_policy(RoleName=ROLE_NAME, PolicyName=INLINE_POLICY_NAME)
     except ClientError as inner:
         inner_code = inner.response["Error"]["Code"]
         if inner_code == "NoSuchEntity":
@@ -217,6 +212,31 @@ def ensure_iam_policy_extended():
             sys.exit(1)
         if inner_code not in ("AccessDenied", "UnauthorizedAccess", "AccessDeniedException"):
             raise
+    else:
+        # Validate the attached document, so a stale AirbnbDWGlueS3Policy from
+        # an earlier run (e.g. one that only granted read on raw/) isn't
+        # silently accepted as current — that would leave cleaned/warehouse
+        # crawlers to fail later with an opaque S3 AccessDenied.
+        returned_doc = resp["PolicyDocument"]
+        if isinstance(returned_doc, str):
+            returned_doc = json.loads(returned_doc)
+        expected_doc = json.loads(INLINE_POLICY_DOC)
+        if returned_doc == expected_doc:
+            print(
+                f"      PutRolePolicy blocked by SCP, but '{INLINE_POLICY_NAME}' "
+                f"is already attached to '{ROLE_NAME}' and matches the expected "
+                f"document. Continuing."
+            )
+            return
+        print(
+            f"      '{INLINE_POLICY_NAME}' is attached to '{ROLE_NAME}' but its "
+            f"document does not match the version this script requires."
+        )
+        print(MANUAL_POLICY_INSTRUCTIONS)
+        print("      Replace the existing policy's JSON document via the console with the version above.")
+        print("      If the policy is functionally correct and AWS just reformatted the JSON,")
+        print("      set SKIP_IAM_CHECK=1 to bypass this validation.")
+        sys.exit(1)
     # Both PutRolePolicy and GetRolePolicy denied — SCP also blocks IAM reads.
     # Cannot verify automatically; offer a manual-acknowledged continue path
     # so the user can proceed after applying the policy via the console.
