@@ -228,6 +228,13 @@ def ensure_iam_policy_extended():
                 f"document. Continuing."
             )
             return
+        if os.environ.get("SKIP_IAM_CHECK") == "1":
+            print(
+                f"      '{INLINE_POLICY_NAME}' is attached to '{ROLE_NAME}' but "
+                f"does not match the expected document. SKIP_IAM_CHECK=1 set — "
+                f"continuing anyway."
+            )
+            return
         print(
             f"      '{INLINE_POLICY_NAME}' is attached to '{ROLE_NAME}' but its "
             f"document does not match the version this script requires."
