@@ -15,6 +15,7 @@ produce data in those zones.
 """
 
 import json
+import os
 import sys
 import time
 
@@ -190,14 +191,47 @@ def ensure_iam_policy_extended():
             PolicyDocument=INLINE_POLICY_DOC,
         )
         print(f"      Inline policy applied (scoped to {BUCKET}, all four zones).")
+        print("      Waiting 5 s for IAM propagation ...")
+        time.sleep(5)
+        return
     except ClientError as e:
         code = e.response["Error"]["Code"]
-        if code in ("AccessDenied", "UnauthorizedAccess", "AccessDeniedException"):
+        if code not in ("AccessDenied", "UnauthorizedAccess", "AccessDeniedException"):
+            raise
+    # PutRolePolicy blocked (typical of the university SCP). Check whether the
+    # policy is already attached — e.g. applied manually via console on a prior
+    # run — so re-runs stay idempotent instead of exiting before any database
+    # or crawler provisioning happens.
+    try:
+        iam.get_role_policy(RoleName=ROLE_NAME, PolicyName=INLINE_POLICY_NAME)
+        print(
+            f"      PutRolePolicy blocked by SCP, but '{INLINE_POLICY_NAME}' "
+            f"is already attached to '{ROLE_NAME}'. Continuing."
+        )
+        return
+    except ClientError as inner:
+        inner_code = inner.response["Error"]["Code"]
+        if inner_code == "NoSuchEntity":
             print(MANUAL_POLICY_INSTRUCTIONS)
+            print("      After applying, re-run this script — it will detect the policy and continue.")
             sys.exit(1)
-        raise
-    print("      Waiting 5 s for IAM propagation ...")
-    time.sleep(5)
+        if inner_code not in ("AccessDenied", "UnauthorizedAccess", "AccessDeniedException"):
+            raise
+    # Both PutRolePolicy and GetRolePolicy denied — SCP also blocks IAM reads.
+    # Cannot verify automatically; offer a manual-acknowledged continue path
+    # so the user can proceed after applying the policy via the console.
+    if os.environ.get("SKIP_IAM_CHECK") == "1":
+        print(
+            f"      SKIP_IAM_CHECK=1 set — assuming '{INLINE_POLICY_NAME}' is "
+            f"in place on '{ROLE_NAME}'. Continuing."
+        )
+        return
+    print(MANUAL_POLICY_INSTRUCTIONS)
+    print("      iam:GetRolePolicy is also blocked, so the script can't verify the policy.")
+    print("      After applying via console, re-run with SKIP_IAM_CHECK=1 to continue:")
+    print("          SKIP_IAM_CHECK=1 python setup_crawlers.py    (bash)")
+    print("          $env:SKIP_IAM_CHECK=1; python setup_crawlers.py    (PowerShell)")
+    sys.exit(1)
 
 
 def ensure_databases():
