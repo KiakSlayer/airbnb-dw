@@ -37,7 +37,7 @@ Per-phase scripts, AWS resource details, and gotchas all stay in CLAUDE.md — d
 
 | Phase | Owner | Task | Status |
 |-------|-------|------|--------|
-| 1–6 | Kiak | Download, simulate, upload, RDS load, handoff | ✅ Done |
+| 1–6 | Kiak | Download, simulate, upload, RDS load | ✅ Done |
 | Kiak-A | Kiak | Glue Python Shell job + daily Scheduler (Automation 1%) | ✅ Done 2026-05-08 |
 | 7 | Pluck | S3 lake zones (raw/cleaned/warehouse) + Glue Crawlers | ✅ Done 2026-05-08 |
 | 8 | Sun | Glue Job 1: Raw → Cleaned (Parquet, dedup, cast) | ⬜ Next (unblocked) |
@@ -57,7 +57,7 @@ Per-phase scripts, AWS resource details, and gotchas all stay in CLAUDE.md — d
 
 | Date | Person | Task | Notes |
 |------|--------|------|-------|
-| 2026-05-07 | Kiak | Phases 1–6 complete | Download, simulate, upload, RDS, handoff doc |
+| 2026-05-07 | Kiak | Phases 1–6 complete | Download, simulate, upload, RDS load |
 | 2026-05-08 | Kiak | Glue job `airbnb-rds-to-s3-export` + daily trigger | S3 Bronze → source-exports, 8 partitions, 02:00 UTC schedule |
 | 2026-05-08 | Pluck | Phase 7 — Glue Data Catalog: 4 DBs + 4 crawlers via `setup_crawlers.py` | Raw + source-exports crawlers ran SUCCEEDED; cleaned + warehouse crawlers deferred until Sun's data lands |
 
@@ -75,7 +75,11 @@ Per-phase scripts, AWS resource details, and gotchas all stay in CLAUDE.md — d
 - **Endpoint:** `airbnb-source-db.crw6s6ou8gww.ap-southeast-1.rds.amazonaws.com:5432`
 - **DB / User:** `airbnb_source` / `airbnbadmin`
 - **Password:** stored in AWS Secrets Manager — `airbnb/rds/airbnbadmin` (region ap-southeast-1). Retrieve with: `aws secretsmanager get-secret-value --secret-id airbnb/rds/airbnbadmin --region ap-southeast-1 --query SecretString --output text`
-- **Security group:** `sg-0cc19604b360489bb` — port 5432 open. Add new inbound rule if your IP changes.
+- **Security group:** `sg-0cc19604b360489bb` — port 5432 open. Add inbound rule if your IP changes:
+  ```bash
+  MY_IP=$(curl -s https://checkip.amazonaws.com)
+  aws ec2 authorize-security-group-ingress --group-id sg-0cc19604b360489bb --protocol tcp --port 5432 --cidr "${MY_IP}/32" --region ap-southeast-1
+  ```
 - **Default state:** Stopped. Start before connecting: `aws rds start-db-instance --db-instance-identifier airbnb-source-db --region ap-southeast-1`
 - **Stop after use:** `aws rds stop-db-instance --db-instance-identifier airbnb-source-db --region ap-southeast-1`
 - **Takes ~4 min to start** (passes through `configuring-enhanced-monitoring` before `available`)
@@ -109,6 +113,21 @@ s3://airbnb-dw-856480643132/
 └── glue-scripts/   ← Glue Python Shell scripts
 ```
 
+### S3 Bronze File Inventory
+
+| City | Snapshot | listings | calendar | reviews | geojson |
+|------|----------|----------|----------|---------|---------|
+| bangkok | 2025-09 | 14.2 MiB | 23.9 MiB | 71.5 MiB | 1.8 MiB |
+| bangkok | 2026-03 | 14.3 MiB | 25.1 MiB | 71.5 MiB | 1.8 MiB |
+| lisbon | 2025-12 | 11.2 MiB | 21.2 MiB | 230.5 MiB | 4.1 MiB |
+| lisbon | 2026-03 | 11.2 MiB | 22.2 MiB | 230.6 MiB | 4.1 MiB |
+| singapore | 2025-09 | 1.3 MiB | 2.9 MiB | 4.3 MiB | 838 KiB |
+| singapore | 2026-03 | 1.3 MiB | 3.1 MiB | 4.3 MiB | 838 KiB |
+| tokyo | 2025-09 | 16.4 MiB | 23.1 MiB | 121.4 MiB | 100 KiB |
+| tokyo | 2026-03 | 16.5 MiB | 24.2 MiB | 121.4 MiB | 100 KiB |
+
+Total: 40 objects, ~1.1 GiB. Verify: `aws s3 ls s3://airbnb-dw-856480643132/raw/ --recursive --human-readable --summarize`
+
 ---
 
 ## Cities & Snapshots
@@ -131,12 +150,23 @@ s3://airbnb-dw-856480643132/
 | `price` | `"$1,200.00"` | Strip `[\$,]`, cast to NUMERIC/FLOAT |
 | `host_is_superhost` | `"t"` / `"f"` | Map to TRUE/FALSE |
 | `host_response_rate` | `"95%"` | Strip `%`, cast to FLOAT |
+| `host_acceptance_rate` | `"80%"` | Strip `%`, cast to FLOAT |
 | `amenities` | JSON string | Parse as JSONB array |
 | `host_verifications` | JSON string | Parse as JSONB array |
 
 **Schema drift:** `host_profile_id` appears in Singapore CSVs only — normalise to fixed column list in ETL.
 
 **SCD Type 2 pattern:** compare snapshot → expire changed rows (`effective_to = today`, `is_current = false`) → insert new version. Columns needed: `effective_from`, `effective_to`, `is_current`.
+
+**SCD mutation rates (Snapshot 2 simulation, seed=42):**
+
+| Column | Change rate | Notes |
+|--------|-------------|-------|
+| `price` | ~15% of rows | ±10–25% random delta |
+| `host_is_superhost` | ~8% of rows | Status flip |
+| `host_response_rate` | ~10% of rows | Drift ±5–15 pp |
+| `room_type` | ~5% of rows | Category change |
+| `name` | ~3% of rows | Appended `"[Renovated]"` suffix |
 
 ---
 

@@ -94,28 +94,7 @@ aws rds stop-db-instance --db-instance-identifier airbnb-source-db --region ap-s
 
 ## Cities & Snapshots
 
-| City | Snapshot 1 | Snapshot 2 (simulated) |
-|------|-----------|----------------------|
-| Bangkok | 2025-09 | 2026-03 |
-| Singapore | 2025-09 | 2026-03 |
-| Tokyo | 2025-09 | 2026-03 |
-| Lisbon | 2025-12 | 2026-03 |
-
-Snapshot 2 applies controlled mutations (price drift, superhost flips, room type changes) to drive SCD Type 2 slowly-changing dimensions. See `CLAUDE.md` for exact rates.
-
----
-
-## Data Quality Notes
-
-| Field | Raw format | ETL fix |
-|-------|-----------|---------|
-| `price` | `"$1,595.00"` | Strip `$`/`,`, cast to NUMERIC |
-| `host_is_superhost` | `"t"` / `"f"` | Map to boolean |
-| `host_response_rate` | `"95%"` | Strip `%`, cast to FLOAT |
-| `amenities` | JSON string | Parse as array |
-| `host_verifications` | JSON string | Parse as array |
-
-> **Schema drift:** Singapore CSVs include a `host_profile_id` column absent from other cities. ETL jobs must normalise to a fixed schema.
+Bangkok · Singapore · Tokyo each have snapshots 2025-09 and 2026-03; Lisbon has 2025-12 and 2026-03. Snapshot 2 is programmatically simulated to drive SCD Type 2. See `CLAUDE.md` for the full table, Lisbon gotcha, and mutation rates.
 
 ---
 
@@ -130,6 +109,3 @@ See `CLAUDE.md` for RDS connection details, security group setup, and full comma
 
 ---
 
-## Handoff
-
-`handoff.md` contains Sun's onboarding guide: S3 file inventory, RDS connection, SCD Type 2 design, and expected Silver/Gold architecture.
