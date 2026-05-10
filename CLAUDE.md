@@ -29,9 +29,9 @@ Per-phase scripts, AWS resource details, and gotchas all stay in CLAUDE.md — d
 ## Current Status (as of 2026-05-08)
 
 **Kiak** — All deliverables complete ✅
-**Sun** — Phase 7 done (catalog ready); ⬜ Phase 8 unblocked — Glue Job 1 Raw → Cleaned
-**Pluck** — Phase 7 done ✅; ⬜ Phase 11 (Variety memo) can start now
-**Jop** — Still blocked on Phase 8
+**Sun** — Phase 10 done ✅; ⬜ Phase 18 unblocked after Phase 13 (Pluck's Workflow Scheduler)
+**Pluck** — Phase 7 done ✅; ⬜ Phase 11 (Variety memo), Phase 12 (Athena), Phase 13 (Workflow Scheduler) all unblocked
+**Jop** — ⬜ Phase 14 (QuickSight) now unblocked; Phase 15–17 still blocked by Pluck's Phase 12
 
 ### Phase Tracker
 
@@ -40,13 +40,13 @@ Per-phase scripts, AWS resource details, and gotchas all stay in CLAUDE.md — d
 | 1–6 | Kiak | Download, simulate, upload, RDS load | ✅ Done |
 | Kiak-A | Kiak | Glue Python Shell job + daily Scheduler (Automation 1%) | ✅ Done 2026-05-08 |
 | 7 | Pluck | S3 lake zones (raw/cleaned/warehouse) + Glue Crawlers | ✅ Done 2026-05-08 |
-| 8 | Sun | Glue Job 1: Raw → Cleaned (Parquet, dedup, cast) | ⬜ Next (unblocked) |
-| 9 | Sun | Glue Job 2: Cleaned → Dimensions (SCD Type 2) | ⬜ Blocked by 8 |
-| 10 | Sun | Glue Job 3: Cleaned → Facts + VADER sentiment | ⬜ Blocked by 9 |
+| 8 | Sun | Glue Job 1: Raw → Cleaned (Parquet, dedup, cast) | ✅ Done 2026-05-10 |
+| 9 | Sun | Glue Job 2: Cleaned → Dimensions (SCD Type 2) | ✅ Done 2026-05-11 |
+| 10 | Sun | Glue Job 3: Cleaned → Facts + VADER sentiment | ✅ Done 2026-05-11 |
 | 11 | Pluck | Variety justification memo (5 format families) | ⬜ Can start now |
-| 12 | Pluck | Athena on cleaned zone + 5–10 sample queries | ⬜ Blocked by 8 |
-| 13 | Pluck | Glue Workflow Scheduler: Job 1→2→3 at 02:00 UTC | ⬜ Blocked by 10 |
-| 14 | Jop | QuickSight connected to Athena/RDS | ⬜ Blocked by 8 |
+| 12 | Pluck | Athena on cleaned zone + 5–10 sample queries | ⬜ Can start now |
+| 13 | Pluck | Glue Workflow Scheduler: Job 1→2→3 at 02:00 UTC | ⬜ Can start now |
+| 14 | Jop | QuickSight connected to Athena/RDS | ⬜ Can start now |
 | 15–17 | Jop | Dashboards 1–3 (Market · Pricing · Sentiment) | ⬜ Blocked by 12 |
 | 18 | Sun | End-to-end pipeline test + row count validation | ⬜ Blocked by 13 |
 | 19 | All | Record Video 1 (Kiak+Sun) and Video 2 (Pluck+Jop) | ⬜ Blocked by 18 |
@@ -60,6 +60,9 @@ Per-phase scripts, AWS resource details, and gotchas all stay in CLAUDE.md — d
 | 2026-05-07 | Kiak | Phases 1–6 complete | Download, simulate, upload, RDS load |
 | 2026-05-08 | Kiak | Glue job `airbnb-rds-to-s3-export` + daily trigger | S3 Bronze → source-exports, 8 partitions, 02:00 UTC schedule |
 | 2026-05-08 | Pluck | Phase 7 — Glue Data Catalog: 4 DBs + 4 crawlers via `setup_crawlers.py` | Raw + source-exports crawlers ran SUCCEEDED; cleaned + warehouse crawlers deferred until Sun's data lands |
+| 2026-05-10 | Sun | Phase 8 — Glue Job 1 `airbnb-raw-to-cleaned` | ETL Spark GlueVersion 4.0; all 8 city/snapshot pairs; listings/calendar/reviews → Parquet in cleaned/; run SUCCEEDED |
+| 2026-05-11 | Sun | Phase 9 — Glue Job 2 `airbnb-cleaned-to-dims` | dim_listing + dim_host (SCD Type 2), dim_location (SCD Type 1), dim_date (generated); output verified in warehouse/ |
+| 2026-05-11 | Sun | Phase 10 — Glue Job 3 `airbnb-cleaned-to-facts` | fact_listing_snapshot, fact_calendar, fact_review + VADER sentiment; IAM fix needed (warehouse/* GetObject missing) |
 
 ---
 
@@ -86,10 +89,11 @@ Per-phase scripts, AWS resource details, and gotchas all stay in CLAUDE.md — d
 
 ### Glue
 
-- **Job:** `airbnb-rds-to-s3-export` (Python Shell, GlueVersion 1.0)
-- **Trigger:** `airbnb-rds-export-daily` — `cron(0 2 * * ? *)`, ACTIVATED
-- **IAM role:** `AWSGlueServiceRole-airbnb` — inline policy `AirbnbDWGlueS3Policy` (read raw/cleaned/warehouse/source-exports/glue-scripts; write source-exports only)
-- **Script on S3:** `s3://airbnb-dw-856480643132/glue-scripts/glue_rds_export.py`
+- **Job (Kiak):** `airbnb-rds-to-s3-export` (Python Shell, GlueVersion 1.0) — RDS → source-exports
+- **Job (Sun):** `airbnb-raw-to-cleaned` (ETL Spark, GlueVersion 4.0, G.1X × 2) — Raw CSV → Cleaned Parquet
+- **Trigger:** `airbnb-rds-export-daily` — `cron(0 2 * * ? *)`, ACTIVATED (Kiak job only; Phase 13 will add workflow scheduler for Jobs 1–3)
+- **IAM role:** `AWSGlueServiceRole-airbnb` — inline policy `AirbnbDWGlueS3Policy` (read raw/glue-scripts; list raw/source-exports/cleaned/warehouse/glue-temp; write source-exports + cleaned + glue-temp)
+- **Scripts on S3:** `s3://airbnb-dw-856480643132/glue-scripts/glue_rds_export.py` · `glue_job1_raw_to_cleaned.py`
 
 ### Glue Data Catalog (Phase 7 — Pluck)
 
@@ -97,7 +101,7 @@ Per-phase scripts, AWS resource details, and gotchas all stay in CLAUDE.md — d
 |----------|-------------|---------|-------|
 | `airbnb_raw` | `s3://.../raw/` | `airbnb-crawler-raw` | crawled ✅ — 1 table `raw` (8 partitions city/snapshot) |
 | `airbnb_source_exports` | `s3://.../source-exports/` | `airbnb-crawler-source-exports` | crawled ✅ — 1 table `source_exports` (8 partitions) |
-| `airbnb_cleaned` | `s3://.../cleaned/` | `airbnb-crawler-cleaned` | READY — run after Phase 8 lands data |
+| `airbnb_cleaned` | `s3://.../cleaned/` | `airbnb-crawler-cleaned` | Run now — Phase 8 data landed ✅ |
 | `airbnb_warehouse` | `s3://.../warehouse/` | `airbnb-crawler-warehouse` | READY — run after Phases 9–10 land data |
 
 Run a deferred crawler manually: `aws glue start-crawler --name airbnb-crawler-cleaned --region ap-southeast-1`
@@ -185,6 +189,9 @@ Total: 40 objects, ~1.1 GiB. Verify: `aws s3 ls s3://airbnb-dw-856480643132/raw/
 - Git Bash converts leading `/` paths to Windows paths — use PowerShell for AWS CLI calls with log group names like `/aws-glue/...`
 - University SCP may block `iam:CreateRole` — `setup_glue_job.py` handles this with console instructions
 
+### IAM Policy
+- `warehouse/*` needs **both** `s3:GetObject` (read) AND `s3:PutObject`/`s3:DeleteObject` (write) — Jobs 2 and 3 write dims/facts to warehouse/, and Job 3 reads dims back. A write-only policy on warehouse/ causes `RESOURCE_NOT_FOUND_ERROR` when Job 3 tries to load dimensions. The final policy in `setup_glue_job2.py` / `setup_glue_job3.py` is correct — always use that as the source of truth.
+
 ### Glue Crawlers
 - `update_crawler` takes **flat kwargs** (`Name=, Role=, Targets=, ...`) — NOT a nested `CrawlerUpdate` dict like `update_job`. Copy/pasting the job pattern raises `InvalidInputException`.
 - `RecrawlBehavior=CRAWL_NEW_FOLDERS_ONLY` requires `SchemaChangePolicy.UpdateBehavior=LOG` AND `DeleteBehavior=LOG`. Only `CRAWL_EVERYTHING` accepts `UPDATE_IN_DATABASE`.
@@ -204,6 +211,12 @@ Total: 40 objects, ~1.1 GiB. Verify: `aws s3 ls s3://airbnb-dw-856480643132/raw/
 | `glue_rds_export.py` | Deploy via `setup_glue_job.py` | Glue job script (S3 Bronze → source-exports) |
 | `setup_glue_job.py` | `python setup_glue_job.py` | Provision/update Glue job + trigger (idempotent) |
 | `setup_crawlers.py` | `python setup_crawlers.py` | Phase 7: provision 4 Glue DBs + 4 crawlers (idempotent); auto-runs raw + source-exports crawlers |
+| `glue_job1_raw_to_cleaned.py` | Deploy via `setup_glue_job1.py` | Phase 8 Glue ETL script (Raw CSV → Cleaned Parquet, all cities/snapshots) |
+| `setup_glue_job1.py` | `python setup_glue_job1.py` | Phase 8: provision Glue ETL job `airbnb-raw-to-cleaned` + update IAM policy for cleaned/ write |
+| `glue_job2_cleaned_to_dims.py` | Deploy via `setup_glue_job2.py` | Phase 9 Glue ETL script (Cleaned → dim_listing, dim_host, dim_location, dim_date) |
+| `setup_glue_job2.py` | `python setup_glue_job2.py` | Phase 9: provision Glue ETL job `airbnb-cleaned-to-dims` + update IAM for warehouse/ write |
+| `glue_job3_cleaned_to_facts.py` | Deploy via `setup_glue_job3.py` | Phase 10 Glue ETL script (Cleaned → fact_listing_snapshot, fact_calendar, fact_review + VADER) |
+| `setup_glue_job3.py` | `python setup_glue_job3.py` | Phase 10: provision Glue ETL job `airbnb-cleaned-to-facts` (no IAM changes needed) |
 
 All scripts run from `cd airbnb-dw`.
 
