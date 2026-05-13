@@ -26,12 +26,12 @@ Per-phase scripts, AWS resource details, and gotchas all stay in CLAUDE.md — d
 
 ---
 
-## Current Status (as of 2026-05-08)
+## Current Status (as of 2026-05-14)
 
 **Kiak** — All deliverables complete ✅
 **Sun** — Phase 10 done ✅; ⬜ Phase 18 unblocked after Phase 13 (Pluck's Workflow Scheduler)
-**Pluck** — Phase 7 done ✅; ⬜ Phase 11 (Variety memo), Phase 12 (Athena), Phase 13 (Workflow Scheduler) all unblocked
-**Jop** — ⬜ Phase 14 (QuickSight) now unblocked; Phase 15–17 still blocked by Pluck's Phase 12
+**Pluck** — Phases 11–13 done ✅; ⬜ Phase 12 needs `python setup_athena.py` + crawler run to land tables before running queries
+**Jop** — ⬜ Phase 14 (QuickSight) now unblocked; Phase 15–17 unblocked after Pluck runs setup_athena.py
 
 ### Phase Tracker
 
@@ -43,9 +43,9 @@ Per-phase scripts, AWS resource details, and gotchas all stay in CLAUDE.md — d
 | 8 | Sun | Glue Job 1: Raw → Cleaned (Parquet, dedup, cast) | ✅ Done 2026-05-10 |
 | 9 | Sun | Glue Job 2: Cleaned → Dimensions (SCD Type 2) | ✅ Done 2026-05-11 |
 | 10 | Sun | Glue Job 3: Cleaned → Facts + VADER sentiment | ✅ Done 2026-05-11 |
-| 11 | Pluck | Variety justification memo (5 format families) | ⬜ Can start now |
-| 12 | Pluck | Athena on cleaned zone + 5–10 sample queries | ⬜ Can start now |
-| 13 | Pluck | Glue Workflow Scheduler: Job 1→2→3 at 02:00 UTC | ⬜ Can start now |
+| 11 | Pluck | Variety justification memo (5 format families) | ✅ Done 2026-05-14 |
+| 12 | Pluck | Athena on cleaned zone + 5–10 sample queries | ✅ Done 2026-05-14 — run `python setup_athena.py` to activate |
+| 13 | Pluck | Glue Workflow Scheduler: Job 1→2→3 at 02:00 UTC | ✅ Done 2026-05-14 — run `python setup_workflow.py` to activate |
 | 14 | Jop | QuickSight connected to Athena/RDS | ⬜ Can start now |
 | 15–17 | Jop | Dashboards 1–3 (Market · Pricing · Sentiment) | ⬜ Blocked by 12 |
 | 18 | Sun | End-to-end pipeline test + row count validation | ⬜ Blocked by 13 |
@@ -63,6 +63,9 @@ Per-phase scripts, AWS resource details, and gotchas all stay in CLAUDE.md — d
 | 2026-05-10 | Sun | Phase 8 — Glue Job 1 `airbnb-raw-to-cleaned` | ETL Spark GlueVersion 4.0; all 8 city/snapshot pairs; listings/calendar/reviews → Parquet in cleaned/; run SUCCEEDED |
 | 2026-05-11 | Sun | Phase 9 — Glue Job 2 `airbnb-cleaned-to-dims` | dim_listing + dim_host (SCD Type 2), dim_location (SCD Type 1), dim_date (generated); output verified in warehouse/ |
 | 2026-05-11 | Sun | Phase 10 — Glue Job 3 `airbnb-cleaned-to-facts` | fact_listing_snapshot, fact_calendar, fact_review + VADER sentiment; IAM fix needed (warehouse/* GetObject missing) |
+| 2026-05-14 | Pluck | Phase 11 — Variety memo | `variety_memo.md` — 5 format families: CSV.gz, Parquet, GeoJSON, PostgreSQL/RDS, embedded JSON arrays |
+| 2026-05-14 | Pluck | Phase 12 — Athena setup + 10 sample queries | `setup_athena.py` (workgroup + crawler triggers) + `athena_queries.sql` (Q1–Q10 on airbnb_cleaned) |
+| 2026-05-14 | Pluck | Phase 13 — Glue Workflow `airbnb-etl-workflow` | `setup_workflow.py` — schedule trigger (02:00 UTC) → Job 1 → Job 2 → Job 3; conditional triggers on SUCCEEDED |
 
 ---
 
@@ -217,6 +220,10 @@ Total: 40 objects, ~1.1 GiB. Verify: `aws s3 ls s3://airbnb-dw-856480643132/raw/
 | `setup_glue_job2.py` | `python setup_glue_job2.py` | Phase 9: provision Glue ETL job `airbnb-cleaned-to-dims` + update IAM for warehouse/ write |
 | `glue_job3_cleaned_to_facts.py` | Deploy via `setup_glue_job3.py` | Phase 10 Glue ETL script (Cleaned → fact_listing_snapshot, fact_calendar, fact_review + VADER) |
 | `setup_glue_job3.py` | `python setup_glue_job3.py` | Phase 10: provision Glue ETL job `airbnb-cleaned-to-facts` (no IAM changes needed) |
+| `variety_memo.md` | — (document) | Phase 11: Big Data Variety justification — 5 format families |
+| `setup_athena.py` | `python setup_athena.py` | Phase 12: create Athena workgroup `airbnb-analytics`, trigger cleaned+warehouse crawlers |
+| `athena_queries.sql` | Paste into Athena console | Phase 12: 10 sample queries on airbnb_cleaned (listings/calendar/reviews) |
+| `setup_workflow.py` | `python setup_workflow.py` | Phase 13: provision Glue Workflow `airbnb-etl-workflow` — Job 1→2→3 at 02:00 UTC |
 
 All scripts run from `cd airbnb-dw`.
 
